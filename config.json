@@ -1,1 +1,16 @@
-
+{
+    "enc_imdb_api_key": "",
+    "supported_extensions": [".mkv", ".mp4", ".m4v", ".avi", ".mov"],
+    "tv_settings": {
+        "min_file_size_mb": 50,
+        "max_file_size_mb": 2048,
+        "preferred_video_codec": "libx265",
+        "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"]
+    },
+    "movie_settings": {
+        "min_file_size_mb": 500,
+        "max_file_size_mb": 4096,
+        "preferred_video_codec": "libx265",
+        "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"]
+    }
+}
