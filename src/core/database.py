@@ -97,6 +97,24 @@ class Database:
                     overview TEXT,
                     FOREIGN KEY (series_id) REFERENCES series(series_id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS report_snapshots (
+                    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_period TEXT NOT NULL,
+                    report_type TEXT NOT NULL,
+                    metrics_json TEXT NOT NULL,
+                    created_date TEXT NOT NULL
+                );
+
+                -- System Audit Log Table
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    module_name TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
+                );
             """)
             conn.commit()
 
