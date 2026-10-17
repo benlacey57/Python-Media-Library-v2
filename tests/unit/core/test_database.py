@@ -1,13 +1,13 @@
 import os
 from pathlib import Path
 import pytest
-from core.database import DatabaseManager
+from core.database import Database
 from core.models import MediaItemModel, SeriesModel
 
 
 @pytest.fixture
 def db_path(tmp_path):
-  return tmp_path / "test_media.db"
+  return tmp_path / "data/database.sqlite"
 
 
 @pytest.fixture
