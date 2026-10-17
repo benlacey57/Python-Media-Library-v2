@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 import subprocess
 from core.database import Database
-
+from core.audit import Audit
 
 def run_ffprobe(file_path):
     """Runs ffprobe on a file and returns JSON metadata."""
@@ -33,6 +33,7 @@ class Analyzer:
     def __init__(self, db: Database):
         self.db = db
 
+    @audit.log_action("EXTRACT_METADATA")
     def extract_metadata(self, file_path: Path) -> dict:
         """Extracts metadata for a single file using ffprobe."""
         file_path = Path(file_path)
@@ -66,6 +67,7 @@ class Analyzer:
             "subtitle_track_count": sub_count,
         }
 
+    @audit.log_action("SCAN_DIRECTORY")
     def scan_directory(self, directory_path: str) -> int:
         """Scans a directory for supported media files, extracts metadata, and saves to DB."""
         base = Path(directory_path).expanduser()
