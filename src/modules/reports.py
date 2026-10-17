@@ -2,7 +2,6 @@ from core.database import Database
 
 
 class ReportingModule:
-
     def __init__(self, db: Database):
         self.db = db
 
