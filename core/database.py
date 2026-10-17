@@ -5,9 +5,9 @@ from pathlib import Path
 class DatabaseManager:
     def __init__(self, db_path=None):
         if db_path is None:
-            config_dir = Path("~/.config/media_manager").expanduser()
-            config_dir.mkdir(parents=True, exist_ok=True)
-            db_path = config_dir / "media.db"
+            data_dir = Path("data")
+            data_dir.mkdir(parents=True, exist_ok=True)
+            db_path = data_dir / "database.sqlite"
         self.db_path = str(db_path)
 
     def get_connection(self):
@@ -20,55 +20,130 @@ class DatabaseManager:
         with self.get_connection() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS categories (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS series (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    series_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
+                    sort_title TEXT,
                     imdb_id TEXT UNIQUE,
                     release_year INTEGER,
                     start_date TEXT,
                     end_date TEXT,
                     genre TEXT,
                     age_rating TEXT,
-                    total_seasons INTEGER,
-                    overview TEXT
+                    total_seasons INTEGER DEFAULT 0,
+                    total_episodes INTEGER DEFAULT 0,
+                    overview TEXT,
+                    poster_path TEXT,
+                    status TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS seasons (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    series_id INTEGER,
-                    season_number INTEGER,
-                    episode_count INTEGER,
-                    FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE
+                    season_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    series_id INTEGER NOT NULL,
+                    season_number INTEGER NOT NULL,
+                    name TEXT,
+                    episode_count INTEGER DEFAULT 0,
+                    overview TEXT,
+                    FOREIGN KEY (series_id) REFERENCES series(series_id) ON DELETE CASCADE
                 );
 
                 CREATE TABLE IF NOT EXISTS media_items (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    series_id INTEGER,
-                    category_id INTEGER,
-                    filepath TEXT UNIQUE NOT NULL,
+                    media_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    category_id INTEGER NOT NULL,
+                    series_id INTEGER NULL,
+                    season_id INTEGER NULL,
                     filename TEXT NOT NULL,
-                    size_bytes INTEGER,
+                    filepath TEXT UNIQUE NOT NULL,
+                    file_size_bytes INTEGER NOT NULL,
+                    file_size_human TEXT NOT NULL,
+                    container_format TEXT,
+                    duration_seconds REAL DEFAULT 0,
                     resolution TEXT,
                     video_codec TEXT,
-                    audio_track_count INTEGER,
-                    subtitle_track_count INTEGER,
-                    is_optimized INTEGER DEFAULT 0,
-                    is_renamed INTEGER DEFAULT 0,
-                    analyzed_date TEXT,
-                    FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE SET NULL,
-                    FOREIGN KEY (category_id) REFERENCES categories(id)
+                    video_profile TEXT,
+                    bitrate_kbps INTEGER,
+                    framerate REAL,
+                    audio_track_count INTEGER DEFAULT 0,
+                    subtitle_track_count INTEGER DEFAULT 0,
+                    season_number INTEGER NULL,
+                    episode_number INTEGER NULL,
+                    episode_title TEXT NULL,
+                    episode_overview TEXT NULL,
+                    air_date TEXT NULL,
+                    external_subtitle_path TEXT NULL,
+                    analyzed_date TEXT NOT NULL,
+                    last_modified_date TEXT NOT NULL,
+                    optimization_status TEXT DEFAULT 'Pending',
+                    naming_status TEXT DEFAULT 'Pending',
+                    FOREIGN KEY (category_id) REFERENCES categories(category_id),
+                    FOREIGN KEY (series_id) REFERENCES series(series_id) ON DELETE SET NULL,
+                    FOREIGN KEY (season_id) REFERENCES seasons(season_id) ON DELETE SET NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS audio_tracks (
+                    audio_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_id INTEGER NOT NULL,
+                    codec_name TEXT,
+                    language TEXT,
+                    channels INTEGER,
+                    title TEXT,
+                    is_default BOOLEAN DEFAULT 0,
+                    is_forced BOOLEAN DEFAULT 0,
+                    FOREIGN KEY (media_id) REFERENCES media_items(media_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS subtitle_tracks (
+                    subtitle_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_id INTEGER NOT NULL,
+                    codec_name TEXT,
+                    language TEXT,
+                    title TEXT,
+                    is_default BOOLEAN DEFAULT 0,
+                    is_forced BOOLEAN DEFAULT 0,
+                    is_external BOOLEAN DEFAULT 0,
+                    FOREIGN KEY (media_id) REFERENCES media_items(media_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS file_optimizations (
+                    optimization_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    media_id INTEGER NOT NULL,
+                    action_type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    details TEXT,
+                    executed_date TEXT,
+                    FOREIGN KEY (media_id) REFERENCES media_items(media_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS missing_episodes (
+                    missing_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    series_id INTEGER NOT NULL,
+                    season_number INTEGER NOT NULL,
+                    episode_number INTEGER NOT NULL,
+                    episode_title TEXT,
+                    air_date TEXT,
+                    overview TEXT,
+                    FOREIGN KEY (series_id) REFERENCES series(series_id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS report_snapshots (
+                    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    report_period TEXT NOT NULL,
+                    report_type TEXT NOT NULL,
+                    metrics_json TEXT NOT NULL,
+                    created_date TEXT NOT NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS audit_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    module TEXT,
-                    level TEXT,
-                    message TEXT
+                    log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    module_name TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    timestamp TEXT NOT NULL
                 );
             """)
             conn.execute("INSERT OR IGNORE INTO categories (name) VALUES ('TV Show')")
@@ -77,9 +152,9 @@ class DatabaseManager:
 
     def get_or_create_category(self, name: str) -> int:
         with self.get_connection() as conn:
-            cursor = conn.execute("SELECT id FROM categories WHERE name = ?", (name,)).fetchone()
+            cursor = conn.execute("SELECT category_id FROM categories WHERE name = ?", (name,)).fetchone()
             if cursor:
-                return cursor["id"]
+                return cursor["category_id"]
             cursor = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
             conn.commit()
             return cursor.lastrowid
@@ -88,23 +163,36 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.execute(
                 """
-                INSERT OR IGNORE INTO series (title, imdb_id, release_year, start_date, end_date, genre, age_rating, total_seasons, overview)
-                VALUES (:title, :imdb_id, :release_year, :start_date, :end_date, :genre, :age_rating, :total_seasons, :overview)
+                INSERT OR IGNORE INTO series (title, sort_title, imdb_id, release_year, start_date, end_date, genre, age_rating, total_seasons, total_episodes, overview, status)
+                VALUES (:title, :sort_title, :imdb_id, :release_year, :start_date, :end_date, :genre, :age_rating, :total_seasons, :total_episodes, :overview, :status)
             """,
-                data,
+                {
+                    "title": data.get("title"),
+                    "sort_title": data.get("sort_title"),
+                    "imdb_id": data.get("imdb_id"),
+                    "release_year": data.get("release_year"),
+                    "start_date": data.get("start_date"),
+                    "end_date": data.get("end_date"),
+                    "genre": data.get("genre"),
+                    "age_rating": data.get("age_rating"),
+                    "total_seasons": data.get("total_seasons", 0),
+                    "total_episodes": data.get("total_episodes", 0),
+                    "overview": data.get("overview"),
+                    "status": data.get("status"),
+                },
             )
             conn.commit()
             if cursor.lastrowid:
                 return cursor.lastrowid
             if data.get("imdb_id"):
-                row = conn.execute("SELECT id FROM series WHERE imdb_id = ?", (data["imdb_id"],)).fetchone()
+                row = conn.execute("SELECT series_id FROM series WHERE imdb_id = ?", (data["imdb_id"],)).fetchone()
                 if row:
-                    return row["id"]
+                    return row["series_id"]
             return 0
 
     def get_series_by_id(self, series_id: int):
         with self.get_connection() as conn:
-            row = conn.execute("SELECT * FROM series WHERE id = ?", (series_id,)).fetchone()
+            row = conn.execute("SELECT * FROM series WHERE series_id = ?", (series_id,)).fetchone()
             return dict(row) if row else None
 
     def insert_media_item(self, data: dict) -> int:
@@ -112,8 +200,8 @@ class DatabaseManager:
             cursor = conn.execute(
                 """
                 INSERT OR REPLACE INTO media_items 
-                (series_id, category_id, filepath, filename, size_bytes, resolution, video_codec, audio_track_count, subtitle_track_count, is_optimized, is_renamed, analyzed_date)
-                VALUES (:series_id, :category_id, :filepath, :filename, :size_bytes, :resolution, :video_codec, :audio_track_count, :subtitle_track_count, :is_optimized, :is_renamed, DATETIME('now'))
+                (category_id, series_id, season_id, filename, filepath, file_size_bytes, file_size_human, container_format, resolution, video_codec, audio_track_count, subtitle_track_count, analyzed_date, last_modified_date)
+                VALUES (:category_id, :series_id, :season_id, :filename, :filepath, :file_size_bytes, :file_size_human, :container_format, :resolution, :video_codec, :audio_track_count, :subtitle_track_count, DATETIME('now'), DATETIME('now'))
             """,
                 data,
             )
@@ -124,4 +212,4 @@ class DatabaseManager:
         with self.get_connection() as conn:
             rows = conn.execute("SELECT * FROM media_items").fetchall()
             return [dict(row) for row in rows]
-          
+            
