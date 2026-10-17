@@ -202,7 +202,6 @@ class Database:
             return dict(row) if row else None
 
     def insert_media_item(self, data: dict) -> int:
-        # Ensure optional parameters exist in the dictionary to prevent binding errors
         data.setdefault("series_id", None)
         data.setdefault("season_id", None)
 
