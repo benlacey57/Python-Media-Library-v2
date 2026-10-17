@@ -1,4 +1,6 @@
+import pytest
 from core.database import Database
+from modules.reports import ReportingModule
 
 @pytest.fixture
 def db(tmp_path):
