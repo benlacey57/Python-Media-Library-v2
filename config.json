@@ -1,6 +1,10 @@
 {
     "enc_imdb_api_key": "",
     "supported_extensions": [".mkv", ".mp4", ".m4v", ".avi", ".mov"],
+    "filename_templates": {
+        "movie": "{title}.({year}).{resolution}.{video_codec}",
+        "tv_show": "{series_name}.S{season:02d}E{episode:02d}.{episode_title}"
+    },
     "tv_settings": {
         "min_file_size_mb": 50,
         "max_file_size_mb": 2048,
