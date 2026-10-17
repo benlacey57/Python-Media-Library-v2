@@ -14,7 +14,7 @@ install:
 	pip install -r requirements.txt
 
 test:
-	pytest -v
+	python -m pytest
 
 lint:
 	ruff check .
@@ -26,4 +26,3 @@ security:
 	bandit -r core modules -ll
 
 check: format lint security test
-
