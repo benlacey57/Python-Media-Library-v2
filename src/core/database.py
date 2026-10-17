@@ -152,7 +152,9 @@ class Database:
 
     def get_or_create_category(self, name: str) -> int:
         with self.get_connection() as conn:
-            cursor = conn.execute("SELECT category_id FROM categories WHERE name = ?", (name,)).fetchone()
+            cursor = conn.execute(
+                "SELECT category_id FROM categories WHERE name = ?", (name,)
+            ).fetchone()
             if cursor:
                 return cursor["category_id"]
             cursor = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
@@ -185,14 +187,18 @@ class Database:
             if cursor.lastrowid:
                 return cursor.lastrowid
             if data.get("imdb_id"):
-                row = conn.execute("SELECT series_id FROM series WHERE imdb_id = ?", (data["imdb_id"],)).fetchone()
+                row = conn.execute(
+                    "SELECT series_id FROM series WHERE imdb_id = ?", (data["imdb_id"],)
+                ).fetchone()
                 if row:
                     return row["series_id"]
             return 0
 
     def get_series_by_id(self, series_id: int):
         with self.get_connection() as conn:
-            row = conn.execute("SELECT * FROM series WHERE series_id = ?", (series_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM series WHERE series_id = ?", (series_id,)
+            ).fetchone()
             return dict(row) if row else None
 
     def insert_media_item(self, data: dict) -> int:
@@ -212,4 +218,3 @@ class Database:
         with self.get_connection() as conn:
             rows = conn.execute("SELECT * FROM media_items").fetchall()
             return [dict(row) for row in rows]
-            
