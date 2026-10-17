@@ -5,7 +5,6 @@ from core.database import Database
 
 
 class Optimizer:
-
     def __init__(self, db: Database, config: dict = None):
         self.db = db
         self.config = config or {}
@@ -15,7 +14,6 @@ class Optimizer:
         executed_actions = []
         items = self.db.get_media_items()
 
-        # Get root-level inefficient codecs from config (with a reliable default fallback)
         inefficient_codecs = set(
             self.config.get("inefficient_codecs", ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"])
         )
@@ -68,7 +66,6 @@ class Optimizer:
                         check=True,
                     )
                     
-                    # Replace original file with optimized version
                     filepath.unlink()
                     out_path.rename(filepath)
 
@@ -81,7 +78,6 @@ class Optimizer:
                     if out_path.exists():
                         out_path.unlink()
 
-                # Log to file_optimizations table
                 conn.execute(
                     """
                     INSERT INTO file_optimizations (media_id, action_type, status, details, executed_date)
