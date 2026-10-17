@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, MagicMock
 import pytest
 from core.database import Database
 from modules.analyzer import Analyzer
@@ -38,7 +38,27 @@ SAMPLE_FFPROBE_OUTPUT = {
     ],
 }
 
+@patch("modules.analyzer.run_ffprobe")
+def test_analyzer_scan(mock_ffprobe, db, tmp_path):
+    mock_ffprobe.return_value = {
+        "streams": [
+            {"codec_type": "video", "codec_name": "h264", "width": 1280, "height": 720},
+            {"codec_type": "audio", "codec_name": "aac", "tags": {"language": "eng"}}
+        ]
+    }
 
+    dummy_file = tmp_path / "Movie.2023.mp4"
+    dummy_file.write_bytes(b"dummy data")
+
+    analyzer = Analyzer(db)
+    count = analyzer.scan_directory(str(tmp_path))
+
+    assert count == 1
+    items = db.get_media_items()
+    assert len(items) == 1
+    assert items[0]["filename"] == "Movie.2023.mp4"
+    assert items[0]["video_codec"] == "h264"
+    
 @patch("modules.analyzer.subprocess.run")
 def test_extract_metadata(mock_run, db, tmp_path):
     # Mock ffprobe subprocess response
