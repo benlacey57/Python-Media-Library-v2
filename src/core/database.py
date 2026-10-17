@@ -3,20 +3,18 @@ from pathlib import Path
 
 
 class Database:
-    def __init__(self, db_path=None):
-        if db_path is None:
-            data_dir = Path("data")
-            data_dir.mkdir(parents=True, exist_ok=True)
-            db_path = data_dir / "database.sqlite"
-        self.db_path = str(db_path)
+    def __init__(self, db_path: Path):
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
     def get_connection(self):
+        """Returns a database connection with sqlite3.Row row_factory enabled."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
         return conn
 
     def initialize_db(self):
+        """Initializes the database schema."""
         with self.get_connection() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS categories (
