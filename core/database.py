@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 
 
-class DatabaseManager:
+class Database:
     def __init__(self, db_path=None):
         if db_path is None:
             data_dir = Path("data")
