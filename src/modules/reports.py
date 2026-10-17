@@ -32,6 +32,42 @@ class ReportingModule:
             "categories": categories,
         }
 
+    def get_encoding_quality_report(self) -> dict:
+        """Reports on video codecs, resolutions (quality), and file formats across the library."""
+        with self.db.get_connection() as conn:
+            ext_rows = conn.execute("""
+                SELECT container_format, COUNT(*) as count, SUM(file_size_bytes) as size
+                FROM media_items
+                GROUP BY container_format
+            """).fetchall()
+            
+            codec_rows = conn.execute("""
+                SELECT video_codec, COUNT(*) as count
+                FROM media_items
+                GROUP BY video_codec
+            """).fetchall()
+
+            res_rows = conn.execute("""
+                SELECT resolution, COUNT(*) as count
+                FROM media_items
+                GROUP BY resolution
+            """).fetchall()
+
+        return {
+            "extensions": {
+                (row["container_format"] or "unknown"): {
+                    "count": row["count"], 
+                    "size_bytes": row["size"] or 0
+                } for row in ext_rows
+            },
+            "video_codecs": {
+                (row["video_codec"] or "unknown"): row["count"] for row in codec_rows
+            },
+            "resolutions": {
+                (row["resolution"] or "Unknown"): row["count"] for row in res_rows
+            },
+        }
+
     def get_missing_episodes_report(self) -> list:
         """Retrieves all tracked missing episodes across series."""
         with self.db.get_connection() as conn:
