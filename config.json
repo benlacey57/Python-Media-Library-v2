@@ -1,20 +1,23 @@
 {
-    "enc_imdb_api_key": "",
+    "imdb_api_key": "",
+    "media_folders": [
+        "~/storage/movies",
+        "~/storage/tv_shows"
+    ],
     "supported_extensions": [".mkv", ".mp4", ".m4v", ".avi", ".mov"],
+    "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"],
     "filename_templates": {
-        "movie": "{title}.({year}).{resolution}.{video_codec}",
+        "movie": "{title}.{year}.{resolution}.{video_codec}",
         "tv_show": "{series_name}.S{season:02d}E{episode:02d}.{episode_title}"
     },
     "tv_settings": {
         "min_file_size_mb": 50,
         "max_file_size_mb": 2048,
-        "preferred_video_codec": "libx265",
-        "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"]
+        "preferred_video_codec": "libx265"
     },
     "movie_settings": {
         "min_file_size_mb": 500,
         "max_file_size_mb": 4096,
-        "preferred_video_codec": "libx265",
-        "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"]
+        "preferred_video_codec": "libx265"
     }
 }
