@@ -1,26 +1,30 @@
-import os
 from pathlib import Path
 import pytest
 from core.database import Database
-from core.models import MediaItemModel, SeriesModel
+from core.models import SeriesModel
 
 
 @pytest.fixture
 def db_path(tmp_path):
-    return tmp_path / "data/database.sqlite"
+    return tmp_path / "test_media.db"
 
 
 @pytest.fixture
 def db(db_path):
-    manager = DatabaseManager(db_path)
+    manager = Database(db_path)
     manager.initialize_db()
     return manager
 
 
 def test_database_initialization(db_path):
-    manager = DatabaseManager(db_path)
+    manager = Database(db_path)
     manager.initialize_db()
     assert db_path.exists()
+
+
+def test_default_database_path():
+    manager = Database()
+    assert manager.db_path == str(Path("data/database.sqlite"))
 
 
 def test_series_crud(db):
@@ -41,27 +45,27 @@ def test_series_crud(db):
 
 
 def test_media_item_insertion(db):
-    # Insert parent category and series first
     cat_id = db.get_or_create_category("TV Show")
-    series_id = db.insert_series(
-        {
-            "title": "Breaking Bad",
-            "imdb_id": "tt0903747",
-            "release_year": 2008,
-            "total_seasons": 5,
-        }
-    )
+    series_id = db.insert_series({
+        "title": "Breaking Bad",
+        "imdb_id": "tt0903747",
+        "release_year": 2008,
+        "total_seasons": 5,
+    })
 
     item_data = {
-        "series_id": series_id,
         "category_id": cat_id,
-        "filepath": "/storage/movies/test/Breaking.Bad.S01E01.mkv",
+        "series_id": series_id,
+        "season_id": None,
         "filename": "Breaking.Bad.S01E01.mkv",
-        "size_bytes": 350000000,
+        "filepath": "/storage/movies/test/Breaking.Bad.S01E01.mkv",
+        "file_size_bytes": 350000000,
+        "file_size_human": "333.79 MB",
+        "container_format": "mkv",
         "resolution": "1920x1080",
         "video_codec": "h264",
-        "is_optimized": 0,
-        "is_renamed": 0,
+        "audio_track_count": 1,
+        "subtitle_track_count": 1,
     }
 
     item_id = db.insert_media_item(item_data)
@@ -73,7 +77,6 @@ def test_media_item_insertion(db):
 
 
 def test_pydantic_validation():
-    # Valid model test
     valid_series = SeriesModel(
         title="Inception",
         imdb_id="tt1375666",
@@ -82,6 +85,6 @@ def test_pydantic_validation():
     )
     assert valid_series.title == "Inception"
 
-    # Invalid model test (e.g., negative release year or missing title)
     with pytest.raises(Exception):
         SeriesModel(title="", release_year=-5)
+        
