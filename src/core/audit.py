@@ -1,4 +1,5 @@
 from datetime import datetime
+import functools
 import logging
 from pathlib import Path
 from core.database import Database
@@ -11,7 +12,6 @@ class Audit:
         self._setup_file_logger()
 
     def _setup_file_logger(self):
-        """Configures optional application-wide file debugging/audit logging."""
         audit_cfg = self.config.get("audit_logging", {})
         self.log_to_file = audit_cfg.get("log_to_file", False)
         self.log_file_path = Path(audit_cfg.get("log_file_path", "media_manager_debug.log"))
@@ -33,7 +33,6 @@ class Audit:
         status_upper = status.upper()
         timestamp = datetime.now().isoformat()
 
-        # 1. Save to SQLite database audit_logs table
         try:
             with self.db.get_connection() as conn:
                 conn.execute(
@@ -47,7 +46,6 @@ class Audit:
         except Exception as e:
             print(f"Failed to write audit log to database: {e}")
 
-        # 2. Optional file-based logging
         if self.logger and self.log_to_file:
             level_map = {
                 "INFO": logging.INFO,
@@ -56,62 +54,41 @@ class Audit:
                 "ERROR": logging.ERROR,
                 "DEBUG": logging.DEBUG
             }
-            log_level = level_map.get(status_upper, logging.INFO)
-            self.logger.log(log_level, f"[{module_name}] {action} ({status_upper}): {message}")
+            self.logger.log(level_map.get(status_upper, logging.INFO), f"[{module_name}] {action} ({status_upper}): {message}")
 
-    def get_entries(self, limit: int = 100, offset: int = 0) -> list:
-        """Retrieves audit log entries with pagination."""
-        with self.db.get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ? OFFSET ?",
-                (limit, offset)
-            ).fetchall()
-            return [dict(row) for row in rows]
-
-    def search_entries(self, query: str) -> list:
-        """Searches log entries matching module name, action, status, or message."""
-        q = f"%{query}%"
-        with self.db.get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT * FROM audit_logs 
-                WHERE module_name LIKE ? OR action LIKE ? OR status LIKE ? OR message LIKE ?
-                ORDER BY timestamp DESC
-                """,
-                (q, q, q, q)
-            ).fetchall()
-            return [dict(row) for row in rows]
-
-    def get_summary(self) -> dict:
-        """Returns log entry counts grouped by status (level) and module."""
-        summary = {"levels": {}, "modules": {}}
-        with self.db.get_connection() as conn:
-            level_rows = conn.execute(
-                "SELECT status, COUNT(*) as count FROM audit_logs GROUP BY status"
-            ).fetchall()
-            for r in level_rows:
-                summary["levels"][r["status"]] = r["count"]
-
-            module_rows = conn.execute(
-                "SELECT module_name, COUNT(*) as count FROM audit_logs GROUP BY module_name"
-            ).fetchall()
-            for r in module_rows:
-                summary["modules"][r["module_name"]] = r["count"]
-        return summary
-
-    def get_timeline_counts(self, interval: str = "date") -> list:
-        """Groups audit log entries over time (by date or hour) showing counts."""
-        with self.db.get_connection() as conn:
-            if interval == "hour":
-                sql = """
-                    SELECT strftime('%Y-%m-%d %H:00', timestamp) as time_bucket, COUNT(*) as count 
-                    FROM audit_logs GROUP BY time_bucket ORDER BY time_bucket DESC
-                """
-            else:
-                sql = """
-                    SELECT date(timestamp) as time_bucket, COUNT(*) as count 
-                    FROM audit_logs GROUP BY time_bucket ORDER BY time_bucket DESC
-                """
-            rows = conn.execute(sql).fetchall()
-            return [{"time_bucket": r["time_bucket"], "count": r["count"]} for r in rows]
-          
+    def log_action(self, action_name: str = None):
+        """
+        A decorator that automatically audits method execution, 
+        catching successes, arguments, and unhandled exceptions.
+        """
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(instance, *args, **kwargs):
+                module_name = instance.__class__.__name__
+                action = action_name or func.__name__.upper()
+                
+                try:
+                    # Execute the core method logic
+                    result = func(instance, *args, **kwargs)
+                    
+                    # Log successful execution
+                    self.log(
+                        module_name=module_name,
+                        action=action,
+                        status="SUCCESS",
+                        message=f"Successfully executed {func.__name__}."
+                    )
+                    return result
+                
+                except Exception as e:
+                    # Log failure and re-raise exception
+                    self.log(
+                        module_name=module_name,
+                        action=action,
+                        status="ERROR",
+                        message=f"Failed executing {func.__name__}: {str(e)}"
+                    )
+                    raise
+            return wrapper
+        return decorator
+        
