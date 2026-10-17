@@ -14,15 +14,15 @@ install:
 	pip install -r requirements-dev.txt
 
 test:
-	python -m pytest
+	PYTHONPATH=src python -m pytest
 
 lint:
-	flake8 .
+	flake8 src/ tests/
 
 format:
-	black .
+	black src/ tests/
 
 security:
-	bandit -r core modules -ll
+	bandit -r src/core src/modules -ll
 
 check: format lint security test
