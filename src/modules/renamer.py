@@ -4,11 +4,9 @@ from core.database import Database
 
 
 class Renamer:
-
     def __init__(self, db: Database, config: dict = None):
         self.db = db
         self.config = config or {}
-        # Default fallback templates if not specified in config
         self.templates = self.config.get("filename_templates", {
             "movie": "{title}.{year}.{resolution}.{video_codec}",
             "tv_show": "{series_name}.S{season:02d}E{episode:02d}.{episode_title}"
@@ -51,7 +49,6 @@ class Renamer:
         safe_series = re.sub(r'[\\/*?:"<>|]', "", series_name).replace(" ", ".")
         safe_title = re.sub(r'[\\/*?:"<>|]', "", episode_title).replace(" ", ".") if episode_title else f"Episode.{episode:02d}"
 
-        # Support safe formatting whether episode_title is present or omitted in template
         try:
             formatted = template.format(
                 series_name=safe_series,
