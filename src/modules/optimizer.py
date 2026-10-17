@@ -8,21 +8,17 @@ class Optimizer:
 
     def __init__(self, db: Database, config: dict = None):
         self.db = db
-        self.config = config or {
-            "tv_settings": {
-                "preferred_video_codec": "libx265",
-                "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"],
-            },
-            "movie_settings": {
-                "preferred_video_codec": "libx265",
-                "inefficient_codecs": ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"],
-            },
-        }
+        self.config = config or {}
 
-    def optimize_media_items(self):
+    def optimize_media_items(self) -> list:
         """Scans pending items in the database and applies FFmpeg optimizations."""
         executed_actions = []
         items = self.db.get_media_items()
+
+        # Get root-level inefficient codecs from config (with a reliable default fallback)
+        inefficient_codecs = set(
+            self.config.get("inefficient_codecs", ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"])
+        )
 
         with self.db.get_connection() as conn:
             for item in items:
@@ -33,9 +29,11 @@ class Optimizer:
 
                 video_codec = item["video_codec"]
                 category = "TV Show" if item["series_id"] else "Movie"
-                settings = self.config["tv_settings"] if category == "TV Show" else self.config["movie_settings"]
-                inefficient_codecs = settings["inefficient_codecs"]
-                target_codec = settings["preferred_video_codec"]
+                settings = self.config.get(
+                    "tv_settings" if category == "TV Show" else "movie_settings", {}
+                )
+                
+                target_codec = settings.get("preferred_video_codec", "libx265")
 
                 needs_transcode = video_codec in inefficient_codecs
                 action_type = "TRANSCODE_VIDEO" if needs_transcode else "STRIP_NON_ENG_TRACKS"
@@ -101,4 +99,4 @@ class Optimizer:
                 })
 
         return executed_actions
-      
+        
