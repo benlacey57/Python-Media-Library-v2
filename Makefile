@@ -4,8 +4,8 @@ help:
 	@echo "Available commands:"
 	@echo "  make install  - Install project dependencies"
 	@echo "  make test     - Run pytest test suite"
-	@echo "  make lint     - Run ruff linter check"
-	@echo "  make format   - Run ruff code formatter"
+	@echo "  make lint     - Run flake8 linter check"
+	@echo "  make format   - Run black code formatter"
 	@echo "  make security - Run bandit security scan"
 	@echo "  make check    - Run format, lint, security, and tests sequentially"
 
@@ -17,10 +17,10 @@ test:
 	python -m pytest
 
 lint:
-	ruff check .
+	flake8 .
 
 format:
-	ruff format .
+	black .
 
 security:
 	bandit -r core modules -ll
