@@ -1,6 +1,7 @@
 from pathlib import Path
 import sqlite3
 
+
 class Database:
     def __init__(self, db_path: Path = Path("data/media_library.sqlite")):
         self.db_path = Path(db_path)
@@ -100,10 +101,16 @@ class Database:
             conn.commit()
 
     def get_media_items(self):
+        """Retrieves all media items joined with their category names."""
         with self.get_connection() as conn:
-            return conn.load("SELECT * FROM media_items") if hasattr(conn, "load") else conn.execute("SELECT * FROM media_items").fetchall()
+            return conn.execute("""
+                SELECT m.*, c.name as category 
+                FROM media_items m 
+                JOIN categories c ON m.category_id = c.category_id
+            """).fetchall()
 
     def insert_media_item(self, data: dict) -> int:
+        """Inserts or replaces a media item record."""
         data.setdefault("series_id", None)
         data.setdefault("season_id", None)
         with self.get_connection() as conn:
@@ -116,6 +123,7 @@ class Database:
             return cursor.lastrowid
 
     def get_or_create_category(self, name: str) -> int:
+        """Retrieves or creates a media category ID."""
         with self.get_connection() as conn:
             cursor = conn.execute("SELECT category_id FROM categories WHERE name = ?", (name,))
             row = cursor.fetchone()
