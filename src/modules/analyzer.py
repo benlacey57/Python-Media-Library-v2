@@ -5,6 +5,7 @@ from core.database import Database
 
 
 def run_ffprobe(file_path):
+    """Runs ffprobe on a file and returns JSON metadata."""
     cmd = [
         "ffprobe",
         "-v",
@@ -66,6 +67,7 @@ class Analyzer:
         }
 
     def scan_directory(self, directory_path: str) -> int:
+        """Scans a directory for supported media files, extracts metadata, and saves to DB."""
         base = Path(directory_path).expanduser()
         if not base.exists():
             return 0
