@@ -107,7 +107,7 @@ class Database:
                 SELECT m.*, c.name as category 
                 FROM media_items m 
                 JOIN categories c ON m.category_id = c.category_id
-            """).fetchall()
+            %s""" % "").fetchall()
 
     def insert_media_item(self, data: dict) -> int:
         """Inserts or replaces a media item record."""
@@ -122,6 +122,23 @@ class Database:
             conn.commit()
             return cursor.lastrowid
 
+    def insert_series(self, data: dict) -> int:
+        """Inserts or replaces a TV series record."""
+        with self.get_connection() as conn:
+            cursor = conn.execute("""
+                INSERT OR REPLACE INTO series 
+                (title, sort_title, imdb_id, release_year, start_date, end_date, genre, age_rating, total_seasons, total_episodes, overview, poster_path, status)
+                VALUES (:title, :sort_title, :imdb_id, :release_year, :start_date, :end_date, :genre, :age_rating, :total_seasons, :total_episodes, :overview, :poster_path, :status)
+            """, data)
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_series(self, series_id: int):
+        """Retrieves a series by its ID."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM series WHERE series_id = ?", (series_id,)).fetchone()
+            return dict(row) if row else None
+
     def get_or_create_category(self, name: str) -> int:
         """Retrieves or creates a media category ID."""
         with self.get_connection() as conn:
@@ -132,4 +149,4 @@ class Database:
             cursor = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
             conn.commit()
             return cursor.lastrowid
-            
+                                  
