@@ -40,13 +40,13 @@ def seeded_db(db, tmp_path):
 def test_optimizer_transcode_plan(mock_run, seeded_db):
     mock_run.return_value = MagicMock(returncode=0)
 
+    # Pass config with root-level inefficient_codecs
     optimizer = Optimizer(seeded_db, config={
-        "tv_settings": {"preferred_video_codec": "libx265", "inefficient_codecs": ["h264"]},
-        "movie_settings": {"preferred_video_codec": "libx265", "inefficient_codecs": ["h264"]}
+        "inefficient_codecs": ["h264"],
+        "tv_settings": {"preferred_video_codec": "libx265"},
+        "movie_settings": {"preferred_video_codec": "libx265"}
     })
 
-    # Run optimization check/execution
     results = optimizer.optimize_media_items()
     assert len(results) == 1
     assert results[0]["status"] == "Success"
-    
