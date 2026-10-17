@@ -13,11 +13,9 @@ def db(tmp_path):
     return database
 
 
-@patch("modules.optimizer.subprocess.run")
-def test_optimizer_transcode_plan(mock_run, db, tmp_path):
-    mock_run.return_value = MagicMock(returncode=0)
-
-    # Insert a dummy media item with an inefficient codec
+@pytest.fixture
+def seeded_db(db, tmp_path):
+    """Fixture to seed the database with a sample movie and file for optimization tests."""
     cat_id = db.get_or_create_category("Movie")
     dummy_file = tmp_path / "sample_movie.mp4"
     dummy_file.write_bytes(b"dummy video data")
@@ -35,8 +33,14 @@ def test_optimizer_transcode_plan(mock_run, db, tmp_path):
         "subtitle_track_count": 1,
     }
     db.insert_media_item(item_data)
+    return db
 
-    optimizer = Optimizer(db, config={
+
+@patch("modules.optimizer.subprocess.run")
+def test_optimizer_transcode_plan(mock_run, seeded_db):
+    mock_run.return_value = MagicMock(returncode=0)
+
+    optimizer = Optimizer(seeded_db, config={
         "tv_settings": {"preferred_video_codec": "libx265", "inefficient_codecs": ["h264"]},
         "movie_settings": {"preferred_video_codec": "libx265", "inefficient_codecs": ["h264"]}
     })
@@ -45,4 +49,4 @@ def test_optimizer_transcode_plan(mock_run, db, tmp_path):
     results = optimizer.optimize_media_items()
     assert len(results) == 1
     assert results[0]["status"] == "Success"
-  
+    
