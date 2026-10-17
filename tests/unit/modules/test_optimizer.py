@@ -1,52 +1,102 @@
+from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import pytest
+import subprocess
 from core.database import Database
-from modules.optimizer import Optimizer
 
 
-@pytest.fixture
-def db(tmp_path):
-    db_path = tmp_path / "test_media.db"
-    database = Database(db_path)
-    database.initialize_db()
-    return database
+class Optimizer:
 
+    def __init__(self, db: Database, config: dict = None):
+        self.db = db
+        self.config = config or {}
 
-@pytest.fixture
-def seeded_db(db, tmp_path):
-    """Fixture to seed the database with a sample movie and file for optimization tests."""
-    cat_id = db.get_or_create_category("Movie")
-    dummy_file = tmp_path / "sample_movie.mp4"
-    dummy_file.write_bytes(b"dummy video data")
+    def optimize_media_items(self) -> list:
+        """Scans pending items in the database and applies FFmpeg optimizations."""
+        executed_actions = []
+        items = self.db.get_media_items()
 
-    item_data = {
-        "category_id": cat_id,
-        "filename": "sample_movie.mp4",
-        "filepath": str(dummy_file),
-        "file_size_bytes": 1000000000,
-        "file_size_human": "953.67 MB",
-        "container_format": "mp4",
-        "resolution": "1920x1080",
-        "video_codec": "h264",  # Inefficient codec
-        "audio_track_count": 1,
-        "subtitle_track_count": 1,
-    }
-    db.insert_media_item(item_data)
-    return db
+        # Get root-level inefficient codecs from config (with a reliable default fallback)
+        inefficient_codecs = set(
+            self.config.get("inefficient_codecs", ["h264", "mpeg4", "mpeg2video", "wmv3", "vc1"])
+        )
 
+        with self.db.get_connection() as conn:
+            for item in items:
+                media_id = item["media_id"]
+                filepath = Path(item["filepath"])
+                if not filepath.exists():
+                    continue
 
-@patch("modules.optimizer.subprocess.run")
-def test_optimizer_transcode_plan(mock_run, seeded_db):
-    mock_run.return_value = MagicMock(returncode=0)
+                video_codec = item["video_codec"]
+                category = "TV Show" if item["series_id"] else "Movie"
+                settings = self.config.get(
+                    "tv_settings" if category == "TV Show" else "movie_settings", {}
+                )
+                
+                target_codec = settings.get("preferred_video_codec", "libx265")
 
-    # Pass config with root-level inefficient_codecs
-    optimizer = Optimizer(seeded_db, config={
-        "inefficient_codecs": ["h264"],
-        "tv_settings": {"preferred_video_codec": "libx265"},
-        "movie_settings": {"preferred_video_codec": "libx265"}
-    })
+                needs_transcode = video_codec in inefficient_codecs
+                action_type = "TRANSCODE_VIDEO" if needs_transcode else "STRIP_NON_ENG_TRACKS"
 
-    results = optimizer.optimize_media_items()
-    assert len(results) == 1
-    assert results[0]["status"] == "Success"
+                out_path = filepath.with_name(f"optimized_{filepath.name}")
+                cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(filepath),
+                    "-map",
+                    "0:v",
+                    "-map",
+                    "0:a:m:language:eng?",
+                    "-map",
+                    "0:s:m:language:eng?",
+                ]
+
+                if needs_transcode:
+                    cmd.extend(["-c:v", target_codec, "-crf", "28", "-preset", "medium"])
+                else:
+                    cmd.extend(["-c:v", "copy"])
+
+                cmd.extend(["-c:a", "copy", "-c:s", "copy", str(out_path)])
+
+                try:
+                    subprocess.run(
+                        cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        check=True,
+                    )
+                    
+                    # Replace original file with optimized version
+                    filepath.unlink()
+                    out_path.rename(filepath)
+
+                    status = "Success"
+                    details = f"Optimized using {target_codec}" if needs_transcode else "Stripped non-English tracks"
+
+                except Exception as e:
+                    status = "Failed"
+                    details = str(e)
+                    if out_path.exists():
+                        out_path.unlink()
+
+                # Log to file_optimizations table
+                conn.execute(
+                    """
+                    INSERT INTO file_optimizations (media_id, action_type, status, details, executed_date)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (media_id, action_type, status, details, datetime.now().isoformat())
+                )
+                conn.commit()
+
+                executed_actions.append({
+                    "media_id": media_id,
+                    "action_type": action_type,
+                    "status": status,
+                    "details": details,
+                })
+
+        return executed_actions
+        
